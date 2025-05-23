@@ -11,7 +11,7 @@ hostname = socket.gethostname()
 print(f"🖥️ Backend démarré sur le noeud : {hostname}")
 
 # Connexion à DuckDB (embedded)
-con = duckdb.connect()
+con = duckdb.connect(read_only = True)  # Connexion en lecture seule
 
 # Charger l'extension httpfs si présente
 ext_path = "/app/extensions/httpfs.duckdb_extension"

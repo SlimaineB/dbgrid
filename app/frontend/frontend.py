@@ -23,7 +23,6 @@ st.markdown("""
 # Example queries
 examples = {
     "Select simple constants": "SELECT 1 AS id, 'hello' AS message;",
-    "Select current timestamp": "SELECT current_timestamp AS now;",
     "Select sample data": """
         SELECT * FROM (VALUES
             (1, 'Alice'),
@@ -32,7 +31,8 @@ examples = {
         ) AS t(id, name);
     """,
     "Update example (no results)": "UPDATE my_table SET col1 = 'value' WHERE id = 1;",
-    "Show Settings": "SELECT * FROM duckdb_settings();"
+    "Show Settings": "SELECT * FROM duckdb_settings();",
+    "Enable  Profiling": "PRAGMA enable_profiling = 'json';",
 }
 
 # Layout with two columns

@@ -16,7 +16,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Installer les dépendances Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 
 # Créer dossier extensions
