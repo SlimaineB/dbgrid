@@ -28,7 +28,7 @@ RUN curl -L -o /app/extensions/httpfs.duckdb_extension.gz \
     gzip -d /app/extensions/httpfs.duckdb_extension.gz
 
 # Copier le code de l'app
-COPY backend.py .
+COPY . .
 
 # Exposer le port standard Streamlit (par défaut 8501)
 EXPOSE 8000
