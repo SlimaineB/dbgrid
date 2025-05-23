@@ -1,2 +1,1 @@
-pip install -r requirements.txt
-uvicorn app:app --reload
+uvicorn backend:app --reload

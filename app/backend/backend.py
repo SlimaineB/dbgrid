@@ -1,12 +1,19 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import duckdb
+import os
 
 app = FastAPI()
 
 # Connexion à DuckDB (embedded)
+ext_path = "/app/extensions/httpfs.duckdb_extension"
+
 con = duckdb.connect()
 
+if os.path.isfile(ext_path):
+    con.execute(f"LOAD '{ext_path}';")
+else:
+    print("Warning: httpfs extension not found")
 class SQLRequest(BaseModel):
     query: str
 
