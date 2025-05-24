@@ -1,4 +1,4 @@
 duckdb==1.2.2
 fastapi==0.115.12
 uvicorn==0.34.2
-pytz==2025.2
+psutil==7.0.0

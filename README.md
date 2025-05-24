@@ -8,7 +8,7 @@ A **DuckDB cluster** deployed with Docker Compose (designed to scale as a statel
 ## Quickstart with Docker Compose
 
 ```bash
-docker compose up -d
+docker-compose up --build -d
 ```
 
 Set up MinIO client alias and create a bucket:

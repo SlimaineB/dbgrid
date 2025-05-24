@@ -10,7 +10,7 @@ COPY requirements.txt .
 
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-COPY frontend.py .
+COPY . .
 
 # Exposer le port FastAPI par défaut
 EXPOSE 8501
