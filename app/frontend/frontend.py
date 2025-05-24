@@ -9,7 +9,7 @@ st.set_page_config(page_title="DuckDB Client", layout="wide")
 st.markdown("""
 <div style="background-color:#0e1117;padding:1rem;border-radius:10px;margin-bottom:2rem;">
     <h2 style="color:white;margin:0;">🧠 GridDB Frontend</h2>
-    <p style="color:#bbb;margin:0;">Enter an SQL query, execute it via the FastAPI backend, and view the results.</p>
+    <p style="color:#bbb;margin:0;">Enter an SQL query, execute it via the GridDB backend, and view the results.</p>
 </div>
 """, unsafe_allow_html=True)
 

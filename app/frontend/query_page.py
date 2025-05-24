@@ -38,7 +38,10 @@ def run_query_page(API_URL, disable_ssl_verification):
                 response = requests.post(API_URL, json=payload, verify=not disable_ssl_verification)
                 elapsed = time.time() - start
                 if response.status_code == 200:
+                    st.success(f"✅ Executed in {elapsed:.4f} seconds")
                     data = response.json()
+                    if "hostname" in data:
+                        st.caption(f"📡 Served by: `{data['hostname']}`")
                     if "columns" in data and "rows" in data:
                         df = pd.DataFrame(data["rows"], columns=data["columns"])
                         st.dataframe(df.head(max_rows), use_container_width=True)
@@ -49,9 +52,6 @@ def run_query_page(API_URL, disable_ssl_verification):
                     if enable_profiling and "profiling" in data:
                         st.markdown("### 🧪 Profiling JSON")
                         st.json(data["profiling"])
-                    if "hostname" in data:
-                        st.caption(f"📡 Served by: `{data['hostname']}`")
-                    st.success(f"✅ Executed in {elapsed:.4f} seconds")
                 else:
                     st.error(f"❌ Error: {response.json()['detail']}")
             except Exception as e:
