@@ -11,6 +11,14 @@ A **DuckDB cluster** deployed with Docker Compose (designed to scale as a statel
 docker-compose up --build -d
 ```
 
+---
+
+## Create a Test Parquet File
+
+```bash
+python3 tests/generate_parquet_file.py
+```
+
 Set up MinIO client alias and create a bucket:
 
 ```bash
@@ -20,6 +28,7 @@ mc cp data/test_data.parquet localminio/test-bucket/
 ```
 
 ---
+
 
 ## Configure DuckDB to access MinIO parquet files
 

@@ -22,5 +22,5 @@ df = pd.DataFrame({
 })
 
 # Sauvegarde en Parquet
-df.to_parquet("test_data.parquet", engine="pyarrow")
-print("Parquet file 'test_data.parquet' generated")
+df.to_parquet("./data/test_data.parquet", engine="pyarrow")
+print("Parquet file './data/test_data.parquet' generated")
