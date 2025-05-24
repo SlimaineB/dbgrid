@@ -48,6 +48,7 @@ with col1:
     query = st.text_area("Your SQL query", height=250, value=examples[example_choice], placeholder="Ex: SELECT 1 as demo;")
     max_rows = st.selectbox("Maximum number of rows to display:", [10, 50, 100, 500, 1000], index=1)
     show_result_json = st.checkbox("Show SQL result as JSON", value=False)
+    enable_profiling = st.checkbox("Enable profiling", value=False)
 
     if st.button("Execute query"):
         if not query.strip():
@@ -55,13 +56,14 @@ with col1:
         else:
             try:
                 start = time.time()
-                response = requests.post(API_URL, json={"query": query}, verify=not disable_ssl_verification)
+                payload = {"query": query, "profiling": enable_profiling}
+                response = requests.post(API_URL, json=payload, verify=not disable_ssl_verification)
                 elapsed = time.time() - start
 
                 if response.status_code == 200:
                     data = response.json()
 
-                    # Display table if results exist
+                    # Display table
                     if "columns" in data and "rows" in data:
                         df = pd.DataFrame(data["rows"], columns=data["columns"])
                         st.dataframe(df.head(max_rows), use_container_width=True)
@@ -71,7 +73,12 @@ with col1:
                             st.markdown("### SQL Result (JSON)")
                             st.json(result_json)
 
-                    # Show backend hostname if available
+                    # Profiling JSON if enabled
+                    if enable_profiling and "profiling" in data:
+                        st.markdown("### 🧪 Profiling JSON")
+                        st.json(data["profiling"])
+
+                    # Backend info
                     if "hostname" in data:
                         st.caption(f"📡 Served by: `{data['hostname']}`")
 

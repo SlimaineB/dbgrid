@@ -4,3 +4,4 @@ requests==2.32.3
 streamlit==1.45.1
 uvicorn==0.34.2
 pytz==2025.2
+psutil==7.0.0
