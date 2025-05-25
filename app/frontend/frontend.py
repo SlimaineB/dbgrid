@@ -4,6 +4,7 @@ import requests
 from pages.query_page import run_query_page
 from pages.cluster_page import run_cluster_page
 from pages.tuning_page import run_tuning_page
+from pages.partition_page import run_partition_page
 
 st.set_page_config(page_title="DuckDB Client", layout="wide")
 
@@ -35,7 +36,7 @@ except Exception as e:
 
 
 # Onglets en haut
-tabs = st.tabs(["Query", "Cluster","Tunning"])
+tabs = st.tabs(["Query", "Cluster","Tunning","Partition"])
 
 with tabs[0]:
     run_query_page(API_URL, disable_ssl_verification)
@@ -45,3 +46,6 @@ with tabs[1]:
 
 with tabs[2]:
     run_tuning_page(TUNING_BASE_URL, disable_ssl_verification)
+
+with tabs[3]:
+    run_partition_page(TUNING_BASE_URL, disable_ssl_verification)

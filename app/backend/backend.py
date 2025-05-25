@@ -7,6 +7,11 @@ import platform
 import psutil
 import json
 import time
+from typing import List
+from collections import defaultdict
+
+from urllib.parse import unquote
+import re
 
 app = FastAPI()
 
@@ -40,6 +45,14 @@ class SQLRequest(BaseModel):
 
 class S3PathRequest(BaseModel):
     s3_path: str
+
+class SuggestPartitionRequest(BaseModel):
+    s3_path: str
+    threshold: int = 10
+
+class PartitionValueCountRequest(BaseModel):
+    s3_path: str
+    column: str
 
 # 🔧 Fonction centralisée de config S3
 def configure_s3():
@@ -195,6 +208,105 @@ def check_row_group_size(req: S3PathRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+
+def extract_partition_columns_from_path(s3_path: str) -> set:
+    """Extrait les noms de colonnes déjà utilisées comme partition dans le chemin S3"""
+    decoded_path = unquote(s3_path)
+    return set(re.findall(r'/([^/=]+)=', decoded_path))
+
+@app.post("/suggest_partitions")
+def suggest_partitions(req: SuggestPartitionRequest):
+    try:
+        configure_s3()
+        con.execute(f"CREATE OR REPLACE VIEW parquet_data AS SELECT * FROM parquet_scan('{req.s3_path}');")
+
+        existing_partitions = extract_partition_columns_from_path(req.s3_path)
+
+        columns = con.execute("PRAGMA table_info(parquet_data);").fetchall()
+        column_names = [col[1] for col in columns]
+
+        result = []
+        suggestions = []
+
+        for col_name in column_names:
+            already_partitioned = col_name in existing_partitions
+
+            try:
+                cardinality = con.execute(f"SELECT COUNT(DISTINCT {col_name}) FROM parquet_data;").fetchone()[0]
+
+                # Ratio de la valeur la plus fréquente
+                top_val_ratio = con.execute(f"""
+                    SELECT MAX(cnt) * 1.0 / SUM(cnt)
+                    FROM (
+                        SELECT COUNT(*) as cnt
+                        FROM parquet_data
+                        GROUP BY {col_name}
+                    );
+                """).fetchone()[0]
+
+                is_balanced = top_val_ratio < 0.7  # configurable : seuil max 70% pour dire "équilibré"
+
+                if already_partitioned:
+                    suggest = "🔁"
+                elif cardinality <= req.threshold and is_balanced:
+                    suggest = "✅"
+                    suggestions.append(col_name)
+                elif not is_balanced:
+                    suggest = "⚠️ Unbalanced"
+                else:
+                    suggest = "❌"
+
+                result.append({
+                    "column": col_name,
+                    "distinct_values": cardinality,
+                    "top_value_ratio": round(top_val_ratio, 2),
+                    "balanced": is_balanced,
+                    "suggest": suggest,
+                    "already_partitioned": already_partitioned
+                })
+
+            except Exception:
+                result.append({
+                    "column": col_name,
+                    "distinct_values": "error",
+                    "top_value_ratio": None,
+                    "balanced": False,
+                    "suggest": "⚠️",
+                    "already_partitioned": already_partitioned
+                })
+
+        return {
+            "s3_path": req.s3_path,
+            "threshold": req.threshold,
+            "already_partitioned_columns": list(existing_partitions),
+            "columns": result,
+            "suggested_partitions": suggestions
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+
+@app.post("/partition_value_counts")
+def get_partition_value_counts(req: PartitionValueCountRequest):
+    try:
+        configure_s3()
+        con.execute(f"CREATE OR REPLACE VIEW parquet_data AS SELECT * FROM parquet_scan('{req.s3_path}');")
+        rows = con.execute(f"""
+            SELECT {req.column} AS value, COUNT(*) AS count 
+            FROM parquet_data 
+            GROUP BY {req.column}
+            ORDER BY count DESC
+        """).fetchall()
+
+        result = [{"value": r[0], "count": r[1]} for r in rows]
+        sum_count = sum( r['count'] for r in result)
+        result = [{"value": r[0], "count": r[1],"repartion": f"{round(r[1]/sum_count*100)}%"} for r in rows]
+        return {"counts": result}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/s3_test")
 def test_s3_connection():
