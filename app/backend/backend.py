@@ -30,7 +30,7 @@ else:
     print("⚠️ Warning: httpfs extension not found")
 
 # Script init si fourni
-init_script = os.getenv("INIT_SQL_PATH", "/app/init.sql")
+init_script = os.getenv("INIT_SQL_PATH", "./init.sql")
 if os.path.isfile(init_script):
     print(f"📜 Executing init script: {init_script}")
     with open(init_script, "r") as f:
@@ -54,15 +54,6 @@ class PartitionValueCountRequest(BaseModel):
     s3_path: str
     column: str
 
-# 🔧 Fonction centralisée de config S3
-def configure_s3():
-    con.execute("SET s3_region='us-east-1'")
-    con.execute("SET s3_url_style='path'")
-    con.execute("SET s3_endpoint='localhost:9000'")
-    con.execute("SET s3_access_key_id='minioadmin'")
-    con.execute("SET s3_secret_access_key='minioadmin'")
-    con.execute("SET s3_use_ssl=false")
-    con.execute("INSTALL httpfs; LOAD httpfs;")
 
 
 @app.post("/query")
@@ -124,7 +115,7 @@ def get_status():
 @app.post("/check_parquet_file_size")
 def check_parquet_size(req: S3PathRequest):
     try:
-        configure_s3()
+        
 
         cpu_count = psutil.cpu_count(logical=True)
 
@@ -180,7 +171,7 @@ def check_parquet_size(req: S3PathRequest):
 @app.post("/check_parquet_row_group_size")
 def check_row_group_size(req: S3PathRequest):
     try:
-        configure_s3()
+        
         query = f"""
             SELECT 
                 file_name,
@@ -217,7 +208,7 @@ def extract_partition_columns_from_path(s3_path: str) -> set:
 @app.post("/suggest_partitions")
 def suggest_partitions(req: SuggestPartitionRequest):
     try:
-        configure_s3()
+        
         con.execute(f"CREATE OR REPLACE VIEW parquet_data AS SELECT * FROM parquet_scan('{req.s3_path}');")
 
         existing_partitions = extract_partition_columns_from_path(req.s3_path)
@@ -291,7 +282,7 @@ def suggest_partitions(req: SuggestPartitionRequest):
 @app.post("/partition_value_counts")
 def get_partition_value_counts(req: PartitionValueCountRequest):
     try:
-        configure_s3()
+        
         con.execute(f"CREATE OR REPLACE VIEW parquet_data AS SELECT * FROM parquet_scan('{req.s3_path}');")
         rows = con.execute(f"""
             SELECT {req.column} AS value, COUNT(*) AS count 
@@ -311,7 +302,7 @@ def get_partition_value_counts(req: PartitionValueCountRequest):
 @app.get("/s3_test")
 def test_s3_connection():
     try:
-        configure_s3()
+        
         con.execute("SELECT * FROM list('s3://your-bucket/') LIMIT 1;")
         return {"s3": "ok"}
     except Exception as e:

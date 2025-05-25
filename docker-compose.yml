@@ -1,5 +1,6 @@
 version: '3.8'
 
+
 services:
   backend1:
     build:
@@ -11,6 +12,8 @@ services:
       - ./app/backend/init.sql:/app/init.sql:ro
     ports:
       - "8001:8000"
+    cpus: 2.0
+    mem_limit: 4g
 
   backend2:
     build:
@@ -22,12 +25,15 @@ services:
       - ./app/backend/init.sql:/app/init.sql:ro
     ports:
       - "8002:8000"
+    cpus: 10.0
+    mem_limit: 16g
+
 
   nginx:
     image: nginx:latest
     container_name: griddb-nginx
     ports:
-      - "8000:80"  # expose nginx sur le port 8000
+      - "8000:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -41,7 +47,7 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - BACKEND_URL=http://nginx:80  # backend via nginx
+      - BACKEND_URL=http://nginx:80
     depends_on:
       - nginx
 
@@ -50,7 +56,7 @@ services:
     container_name: griddb-minio
     ports:
       - "9000:9000"
-      - "9001:9001"  # console
+      - "9001:9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
