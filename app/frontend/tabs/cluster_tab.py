@@ -18,7 +18,7 @@ def ping_status_multiple_times(status_url, n=10, disable_ssl=False):
             errors.append(f"Attempt {i+1}: Exception {str(e)}")
     return collected_statuses, errors
 
-def run_cluster_page(STATUS_URL, disable_ssl_verification):
+def run_cluster_tab(STATUS_URL, disable_ssl_verification):
     st.markdown("## Cluster Node Status")
     num_pings = st.slider("Number of status pings to send:", min_value=1, max_value=50, value=10)
     if st.button("Get Backend Status"):

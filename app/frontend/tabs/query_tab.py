@@ -3,7 +3,7 @@ import requests
 import time
 import pandas as pd
 
-def run_query_page(API_URL, disable_ssl_verification):
+def run_query_tab(API_URL, disable_ssl_verification):
     examples = {
         "Select simple constants": "SELECT 1 AS id, 'hello' AS message;",
         "Select sample data": """

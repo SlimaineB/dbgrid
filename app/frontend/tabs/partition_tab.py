@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 
-def run_partition_page(base_url: str, disable_ssl_verification: bool):
+def run_partition_tab(base_url: str, disable_ssl_verification: bool):
     st.subheader("🧩 Partition Recommendation")
 
     st.markdown("This tool helps identify which columns are good candidates for **partitioning** based on their cardinality and value distribution.")
@@ -20,11 +20,12 @@ def run_partition_page(base_url: str, disable_ssl_verification: bool):
             return
 
         try:
-            resp = requests.post(
-                f"{base_url}/suggest_partitions",
-                json={"s3_path": s3_path, "threshold": threshold},
-                verify=not disable_ssl_verification
-            )
+            with st.spinner("🚀 Analyzing columns... please wait"):
+                resp = requests.post(
+                    f"{base_url}/suggest_partitions",
+                    json={"s3_path": s3_path, "threshold": threshold},
+                    verify=not disable_ssl_verification
+                )
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -38,13 +39,13 @@ def run_partition_page(base_url: str, disable_ssl_verification: bool):
                 df = df.sort_values("distinct_values", na_position="last")
 
                 st.markdown(f"### 🔍 Column Analysis (Threshold: ≤ {threshold})")
-                st.dataframe(df[[
+                st.dataframe(df[[ 
                     "column", 
                     "distinct_values", 
                     "most_frequent_percent", 
                     "balanced", 
                     "already_partitioned", 
-                    "suggest"
+                    "suggest" 
                 ]])
 
                 st.markdown("---")
@@ -74,11 +75,12 @@ def run_partition_page(base_url: str, disable_ssl_verification: bool):
                         for col in suggested:
                             st.markdown(f"#### 🔢 Value counts for `{col}`")
                             try:
-                                value_resp = requests.post(
-                                    f"{base_url}/partition_value_counts",
-                                    json={"s3_path": s3_path, "column": col},
-                                    verify=not disable_ssl_verification
-                                )
+                                with st.spinner(f"📊 Fetching value distribution for `{col}`..."):
+                                    value_resp = requests.post(
+                                        f"{base_url}/partition_value_counts",
+                                        json={"s3_path": s3_path, "column": col},
+                                        verify=not disable_ssl_verification
+                                    )
                                 if value_resp.status_code == 200:
                                     count_df = pd.DataFrame(value_resp.json()["counts"])
                                     st.dataframe(count_df)

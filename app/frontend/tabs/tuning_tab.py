@@ -1,8 +1,11 @@
 import streamlit as st
 import requests
 import pandas as pd
+import time
 
-def run_tuning_page(base_url: str, disable_ssl_verification: bool):
+def run_tuning_tab(base_url: str, disable_ssl_verification: bool):
+
+  
     st.subheader("🎯 Parquet Tuning for GridDB")
 
     with st.expander("ℹ️ Best Practices (DuckDB)"):

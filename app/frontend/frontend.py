@@ -1,10 +1,10 @@
 import streamlit as st
 import os
 import requests
-from pages.query_page import run_query_page
-from pages.cluster_page import run_cluster_page
-from pages.tuning_page import run_tuning_page
-from pages.partition_page import run_partition_page
+from tabs.query_tab import run_query_tab
+from tabs.cluster_tab import run_cluster_tab
+from tabs.tuning_tab import run_tuning_tab
+from tabs.partition_tab import run_partition_tab
 
 st.set_page_config(page_title="DuckDB Client", layout="wide")
 
@@ -49,16 +49,16 @@ tabs = st.tabs([
 
 
 with tabs[0]:
-    run_query_page(API_URL, disable_ssl_verification)
+    run_query_tab(API_URL, disable_ssl_verification)
 
 with tabs[1]:
-    run_cluster_page(STATUS_URL, disable_ssl_verification)
+    run_cluster_tab(STATUS_URL, disable_ssl_verification)
 
 with tabs[2]:
-    run_tuning_page(TUNING_BASE_URL, disable_ssl_verification)
+    run_tuning_tab(TUNING_BASE_URL, disable_ssl_verification)
 
 with tabs[3]:
-    run_partition_page(
+    run_partition_tab(
         TUNING_BASE_URL,
         disable_ssl_verification
     )
