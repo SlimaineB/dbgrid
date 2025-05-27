@@ -186,6 +186,158 @@ def get_partition_value_counts(req: PartitionValueCountRequest, request: Request
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/parquet_filterability_score")
+def parquet_filterability_score(req: S3PathRequest, request: Request):
+    con = request.app.state.con
+
+    try:
+        s3_path = req.s3_path
+        con.execute(f"CREATE OR REPLACE VIEW parquet_data AS SELECT * FROM parquet_scan('{s3_path}')")
+
+        # 1. Cardinality and top value ratio
+        cols = con.execute("PRAGMA table_info(parquet_data);").fetchall()
+        col_names = [col[1] for col in cols]
+
+        results = []
+        for col in col_names:
+            try:
+                distinct_count = con.execute(f"SELECT COUNT(DISTINCT {col}) FROM parquet_data").fetchone()[0]
+                top_val_ratio = con.execute(f"""
+                    SELECT MAX(cnt) * 1.0 / SUM(cnt)
+                    FROM (
+                        SELECT COUNT(*) AS cnt
+                        FROM parquet_data
+                        GROUP BY {col}
+                    )
+                """).fetchone()[0] or 0.0
+
+                results.append({
+                    "column": col,
+                    "distinct_values": distinct_count,
+                    "top_value_ratio": round(top_val_ratio, 2),
+                })
+
+            except Exception:
+                results.append({
+                    "column": col,
+                    "distinct_values": None,
+                    "top_value_ratio": None,
+                })
+
+        # 2. Bloom filter metadata
+        bf_rows = con.execute(f"""
+            SELECT 
+                path_in_schema AS column,
+                COUNT(*) AS row_groups,
+                SUM(CASE WHEN bloom_filter_offset IS NOT NULL THEN 1 ELSE 0 END) AS with_bloom,
+                ROUND(SUM(CASE WHEN bloom_filter_offset IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS bloom_coverage
+            FROM parquet_metadata('{s3_path}')
+            WHERE path_in_schema IS NOT NULL
+            GROUP BY path_in_schema
+        """).fetchall()
+        bf_info = {row[0]: {"row_groups": row[1], "with_bloom": row[2], "bloom_coverage": row[3]} for row in bf_rows}
+
+        # 3. Merge & Score
+        for r in results:
+            col = r["column"]
+            bloom_data = bf_info.get(col, {})
+            coverage = bloom_data.get("bloom_coverage", 0.0)
+            cardinality = r.get("distinct_values") or 0
+            top_ratio = r.get("top_value_ratio") or 1.0
+
+            score = 0
+            if coverage > 0:
+                score += 1
+            if cardinality > 50:
+                score += 1
+            if top_ratio < 0.5:
+                score += 1
+
+            r.update({
+                "bloom_filter_coverage_percent": coverage,
+                "row_groups_with_bloom": bloom_data.get("with_bloom", 0),
+                "filterability_score": score,
+                "filterability_label": (
+                    "✅ High" if score == 3 else
+                    "🟡 Medium" if score == 2 else
+                    "⚠️ Low"
+                )
+            })
+
+        return {
+            "s3_path": s3_path,
+            "columns": results
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/parquet_bloom_filter_check")
+def check_bloom_filter(req: S3PathRequest, request: Request):
+    con = request.app.state.con
+
+    try:
+        query = f"""
+          SELECT 
+                file_name,
+                row_group_id,
+                path_in_schema AS column,
+                CASE WHEN bloom_filter_offset IS NOT NULL THEN True else False END as has_bloom_filter,
+                bloom_filter_length,
+                CASE 
+                    WHEN bloom_filter_offset IS NOT NULL THEN 
+                        CASE 
+                            WHEN bloom_filter_length > 0 THEN '✅ Present'
+                            ELSE '⚠️ Declared but empty'
+                        END
+                    ELSE '❌ Absent'
+                END AS status
+            FROM parquet_metadata(''{req.s3_path}'')
+            WHERE path_in_schema IS NOT NULL
+            ORDER BY file_name, path_in_schema 
+        """
+
+        rows = con.execute(query).fetchall()
+        columns = [desc[0] for desc in con.description]
+
+        # Regroup by file/column
+        grouped = {}
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+            file = row_dict["file_name"]
+            col = row_dict["column"]
+            status = row_dict["status"]
+
+            grouped.setdefault((file, col), []).append(status)
+
+        summary = []
+        for (file, col), statuses in grouped.items():
+            present_ratio = statuses.count("✅ Present") / len(statuses)
+            summary.append({
+                "file": file,
+                "column": col,
+                "row_groups": len(statuses),
+                "with_bloom": statuses.count("✅ Present"),
+                "empty": statuses.count("⚠️ Declared but empty"),
+                "missing": statuses.count("❌ Absent"),
+                "presence_ratio": round(present_ratio * 100, 1),
+                "status": (
+                    "✅ Fully Present" if present_ratio == 1.0 else
+                    "⚠️ Partial" if present_ratio > 0 else
+                    "❌ Absent"
+                )
+            })
+
+        return {
+            "s3_path": req.s3_path,
+            "columns": summary
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/s3_test")
 def test_s3_connection(request: Request):
     con = request.app.state.con

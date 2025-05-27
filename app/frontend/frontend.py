@@ -5,6 +5,7 @@ from tabs.query_tab import run_query_tab
 from tabs.cluster_tab import run_cluster_tab
 from tabs.tuning_tab import run_tuning_tab
 from tabs.partition_tab import run_partition_tab
+from tabs.bloom_filter_tab import run_bloom_filter_tab
 
 st.set_page_config(page_title="DuckDB Client", layout="wide")
 
@@ -44,7 +45,8 @@ tabs = st.tabs([
     "🧪 Run Query",
     "📊 Cluster",
     "⚙️ Tuning",
-    "🧩 Partitioning"
+    "🧩 Partitioning",
+    "🧩 Bloom Filter"
 ])
 
 
@@ -58,7 +60,7 @@ with tabs[2]:
     run_tuning_tab(TUNING_BASE_URL, disable_ssl_verification)
 
 with tabs[3]:
-    run_partition_tab(
-        TUNING_BASE_URL,
-        disable_ssl_verification
-    )
+    run_partition_tab(TUNING_BASE_URL,disable_ssl_verification)
+
+with tabs[4]:
+    run_bloom_filter_tab(TUNING_BASE_URL, disable_ssl_verification)
