@@ -224,18 +224,46 @@ def parquet_filterability_score(req: S3PathRequest, request: Request):
                     "top_value_ratio": None,
                 })
 
-        # 2. Bloom filter metadata
+        # 2. Bloom filter metadata (corrigée)
         bf_rows = con.execute(f"""
             SELECT 
                 path_in_schema AS column,
-                COUNT(*) AS row_groups,
-                SUM(CASE WHEN bloom_filter_offset IS NOT NULL THEN 1 ELSE 0 END) AS with_bloom,
-                ROUND(SUM(CASE WHEN bloom_filter_offset IS NOT NULL THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS bloom_coverage
+                COUNT(*) AS num_row_groups,
+
+                SUM(CASE 
+                    WHEN bloom_filter_offset IS NOT NULL AND bloom_filter_length > 0 THEN 1 
+                    ELSE 0 
+                END) AS num_with_bloom,
+
+                SUM(CASE 
+                    WHEN bloom_filter_offset IS NOT NULL AND bloom_filter_length = 0 THEN 1 
+                    ELSE 0 
+                END) AS num_declared_but_empty,
+
+                SUM(CASE 
+                    WHEN bloom_filter_offset IS NOT NULL AND bloom_filter_length IS NULL THEN 1 
+                    ELSE 0 
+                END) AS num_declared_but_length_missing,
+
+                ROUND(SUM(CASE 
+                    WHEN bloom_filter_offset IS NOT NULL AND bloom_filter_length > 0 THEN 1 
+                    ELSE 0 
+                END) * 100.0 / COUNT(*), 1) AS bloom_coverage
+
             FROM parquet_metadata('{s3_path}')
             WHERE path_in_schema IS NOT NULL
             GROUP BY path_in_schema
         """).fetchall()
-        bf_info = {row[0]: {"row_groups": row[1], "with_bloom": row[2], "bloom_coverage": row[3]} for row in bf_rows}
+
+        bf_info = {
+            row[0]: {
+                "num_row_groups": row[1],
+                "num_with_bloom": row[2],
+                "num_declared_but_empty": row[3],
+                "num_declared_but_length_missing": row[4],
+                "bloom_coverage": row[5],
+            } for row in bf_rows
+        }
 
         # 3. Merge & Score
         for r in results:
@@ -255,7 +283,9 @@ def parquet_filterability_score(req: S3PathRequest, request: Request):
 
             r.update({
                 "bloom_filter_coverage_percent": coverage,
-                "row_groups_with_bloom": bloom_data.get("with_bloom", 0),
+                "row_groups_with_bloom": bloom_data.get("num_with_bloom", 0),
+                "row_groups_declared_but_empty": bloom_data.get("num_declared_but_empty", 0),
+                "row_groups_declared_but_length_missing": bloom_data.get("num_declared_but_length_missing", 0),
                 "filterability_score": score,
                 "filterability_label": (
                     "✅ High" if score == 3 else
@@ -279,23 +309,24 @@ def check_bloom_filter(req: S3PathRequest, request: Request):
 
     try:
         query = f"""
-          SELECT 
-                file_name,
-                row_group_id,
-                path_in_schema AS column,
-                CASE WHEN bloom_filter_offset IS NOT NULL THEN True else False END as has_bloom_filter,
-                bloom_filter_length,
-                CASE 
-                    WHEN bloom_filter_offset IS NOT NULL THEN 
-                        CASE 
-                            WHEN bloom_filter_length > 0 THEN '✅ Present'
-                            ELSE '⚠️ Declared but empty'
-                        END
-                    ELSE '❌ Absent'
-                END AS status
-            FROM parquet_metadata(''{req.s3_path}'')
-            WHERE path_in_schema IS NOT NULL
-            ORDER BY file_name, path_in_schema 
+                SELECT 
+                    file_name,
+                    row_group_id,
+                    path_in_schema AS column,
+                    bloom_filter_offset IS NOT NULL AND bloom_filter_length > 0 AS has_bloom_filter,
+                    bloom_filter_offset,
+                    bloom_filter_length,
+                    CASE 
+                        WHEN bloom_filter_offset IS NOT NULL THEN 
+                            CASE 
+                                WHEN bloom_filter_length > 0 THEN '✅ Present'
+                                ELSE '⚠️ Declared but empty'
+                            END
+                        ELSE '❌ Absent'
+                    END AS status
+                FROM parquet_metadata('{req.s3_path}')
+                WHERE path_in_schema IS NOT NULL
+                ORDER BY file_name, path_in_schema;
         """
 
         rows = con.execute(query).fetchall()
@@ -317,17 +348,20 @@ def check_bloom_filter(req: S3PathRequest, request: Request):
             summary.append({
                 "file": file,
                 "column": col,
-                "row_groups": len(statuses),
-                "with_bloom": statuses.count("✅ Present"),
-                "empty": statuses.count("⚠️ Declared but empty"),
-                "missing": statuses.count("❌ Absent"),
-                "presence_ratio": round(present_ratio * 100, 1),
+                "num_row_groups": len(statuses),
+                "num_with_bloom": statuses.count("✅ Present"),
+                "num_declared_but_empty": statuses.count("⚠️ Declared but empty"),
+                "num_absent": statuses.count("❌ Absent"),
+                "presence_ratio": round(statuses.count("✅ Present") * 100 / len(statuses), 1),
+                "declared_but_empty_ratio": round(statuses.count("⚠️ Declared but empty") * 100 / len(statuses), 1),
                 "status": (
-                    "✅ Fully Present" if present_ratio == 1.0 else
-                    "⚠️ Partial" if present_ratio > 0 else
+                    "✅ Fully Present" if statuses.count("✅ Present") == len(statuses) else
+                    "⚠️ Some Empty" if statuses.count("⚠️ Declared but empty") > 0 and statuses.count("✅ Present") > 0 else
+                    "⚠️ Declared but Empty" if statuses.count("⚠️ Declared but empty") == len(statuses) else
                     "❌ Absent"
                 )
             })
+
 
         return {
             "s3_path": req.s3_path,

@@ -11,7 +11,7 @@ def run_bloom_filter_tab(base_url: str, disable_ssl_verification: bool):
 
     if not s3_path.startswith("s3://"):
         st.warning("❗ Please enter a valid S3 path starting with s3://")
-        return
+        #return
 
     tab1, tab2 = st.tabs(["📊 Filterability Score", "🧪 Bloom Filter Presence"])
 
@@ -41,24 +41,54 @@ def run_bloom_filter_tab(base_url: str, disable_ssl_verification: bool):
                     data = resp.json()
                     df = pd.DataFrame(data["columns"])
 
+                    # Format percentages
                     df["top_value_ratio"] = (df["top_value_ratio"] * 100).round(1).astype(str) + "%"
                     df["bloom_filter_coverage_percent"] = df["bloom_filter_coverage_percent"].astype(str) + "%"
 
+                    # Générer bloom_filter_status lisible
+                    def get_status(row):
+                        if row["row_groups_with_bloom"] > 0:
+                            if row.get("row_groups_declared_but_empty", 0) > 0 or row.get("row_groups_declared_but_length_missing", 0) > 0:
+                                return "⚠️ Mixed"
+                            return "✅ Present"
+                        elif row.get("row_groups_declared_but_empty", 0) > 0 or row.get("row_groups_declared_but_length_missing", 0) > 0:
+                            return "⚠️ Declared but invalid"
+                        return "❌ Absent"
+
+                    df["bloom_filter_status"] = df.apply(get_status, axis=1)
+
+                    # Affichage du tableau
                     st.success("✅ Filterability analysis complete")
                     st.dataframe(df[[ 
                         "column", 
                         "distinct_values", 
                         "top_value_ratio", 
+                        "bloom_filter_status",
+                        "row_groups_with_bloom",
+                        "row_groups_declared_but_empty",
+                        "row_groups_declared_but_length_missing",
                         "bloom_filter_coverage_percent", 
                         "filterability_score",
                         "filterability_label"
                     ]].sort_values("filterability_score", ascending=False), use_container_width=True)
 
+                    # 🧠 Scoring logic info
                     st.markdown("""### 🧠 Scoring Logic
-- `+1` if column has Bloom Filters  
-- `+1` if cardinality > 50  
-- `+1` if top value ratio < 50%  
-""")
+                    - `+1` if column has usable Bloom Filters (non-empty)
+    - `+1` if cardinality > 50
+    - `+1` if top value ratio < 50%
+                    """)
+
+                    # 🔍 Summary text from backend (optionnel)
+                    if "summary" in data:
+                        st.markdown("### 📌 Summary")
+                        for line in data["summary"].get("explanation", []):
+                            st.markdown(f"- {line}")
+
+                        note = data["summary"].get("note")
+                        if note:
+                            st.info(note)
+
                 else:
                     st.error("❌ Backend error:")
                     st.text(resp.text)
