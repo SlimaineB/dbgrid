@@ -1,3 +1,4 @@
 requests==2.32.3
 streamlit==1.45.1
+sqlglot==26.22.1
 
