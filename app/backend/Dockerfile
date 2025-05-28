@@ -18,15 +18,6 @@ COPY requirements.txt .
 # Installer les dépendances Python
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-
-# Créer dossier extensions
-RUN mkdir -p /app/extensions
-
-# Télécharger et décompresser l'extension httpfs
-RUN curl -L -o /app/extensions/httpfs.duckdb_extension.gz \
-    http://extensions.duckdb.org/v1.2.2/linux_amd64_gcc4/httpfs.duckdb_extension.gz && \
-    gzip -d /app/extensions/httpfs.duckdb_extension.gz
-
 # Copier le code de l'app
 COPY . .
 

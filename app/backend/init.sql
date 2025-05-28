@@ -1,5 +1,5 @@
 -- Charge l'extension httpfs (si elle est dans ./extensions/httpfs.duckdb_extension)
-LOAD 'httpfs';
+-- LOAD 'httpfs';
 
 -- For local minio
 
