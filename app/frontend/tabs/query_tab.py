@@ -22,14 +22,26 @@ def run_query_tab(API_URL, disable_ssl_verification):
 
     col1, col2 = st.columns([3, 1])
     with col2:
-        st.markdown("### Example Queries")
+        st.markdown("#### Example Queries")
         example_choice = st.selectbox("", options=list(examples.keys()))
         st.markdown("#### Example SQL")
         st.code(examples[example_choice], language="sql")
 
+        max_rows = st.selectbox("Maximum number of rows to display:", [10, 50, 100, 500, 1000], index=1)
+
+      
+        thread_mode = st.selectbox("Thread mode:", ["Default (Auto)", "Custom number of threads"])
+        if thread_mode == "Custom number of threads":
+            num_threads = st.number_input("Number of threads", min_value=1, step=1, value=2, max_value=200)
+        else:
+            num_threads = -1
+
+
     with col1:
         query = st.text_area("Your SQL query", height=250, value=examples[example_choice], placeholder="Ex: SELECT 1 as demo;")
-        max_rows = st.selectbox("Maximum number of rows to display:", [10, 50, 100, 500, 1000], index=1)
+        
+
+
         show_result_json = st.checkbox("Show SQL result as JSON", value=False)
         enable_profiling = st.checkbox("Enable profiling", value=False)
 
@@ -43,7 +55,8 @@ def run_query_tab(API_URL, disable_ssl_verification):
                 payload = {
                     "query": query,
                     "profiling": enable_profiling,
-                    "max_rows": max_rows  # 👈 envoyé côté backend
+                    "max_rows": max_rows,
+                    "num_threads": num_threads  # 👈 value depends on mode
                 }
                 response = requests.post(API_URL, json=payload, verify=not disable_ssl_verification)
                 elapsed = time.time() - start
@@ -54,6 +67,9 @@ def run_query_tab(API_URL, disable_ssl_verification):
 
                     if "hostname" in data:
                         st.caption(f"📡 Served by: `{data['hostname']}`")
+
+                    if "execution_time" in data:
+                        st.caption(f"⏱️ Backend execution: `{data['execution_time']:.4f} sec`")
 
                     if "columns" in data and "rows" in data:
                         df = pd.DataFrame(data["rows"], columns=data["columns"])
@@ -70,5 +86,6 @@ def run_query_tab(API_URL, disable_ssl_verification):
 
                 else:
                     st.error(f"❌ Error: {response.json().get('detail', 'Unknown error')}")
+
             except Exception as e:
                 st.error(f"🚫 Query failed: {e}")

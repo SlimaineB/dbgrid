@@ -30,12 +30,29 @@ def execute_query(req: SQLRequest, request: Request):
     con = request.app.state.con
     hostname = os.uname().nodename
 
+    original_threads = None
+    start_time = time.time()
+
+    print(f"📥 Received query from {hostname}")
+    print(f"🧵 Threads requested: {req.num_threads}")
+    print(f"📝 Query:\n{req.query.strip()}")
+
     try:
         query = req.query.strip().rstrip(';')
 
-        # Ajoute LIMIT si c'est un SELECT sans LIMIT
+        # Sauvegarde la config actuelle des threads
+        if req.num_threads != -1:
+            try:
+                original_threads = con.execute("SELECT current_setting('threads') AS val").fetchone()[0]
+                con.execute(f"SET threads TO {req.num_threads}")
+                print(f"✅ Threads set to {req.num_threads} (original was {original_threads})")
+            except Exception as e:
+                print(f"⚠️ Failed to set threads: {e}")
+
+        # Ajoute LIMIT si SELECT sans LIMIT
         if re.match(r"(?i)^select\b", query) and not re.search(r"(?i)\blimit\b", query):
             query += f" LIMIT {req.max_rows}"
+            print(f"➕ Appended LIMIT {req.max_rows}")
 
         if req.profiling:
             profile_path = f"/tmp/duckdb_profile_{uuid.uuid4().hex}.json"
@@ -47,21 +64,24 @@ def execute_query(req: SQLRequest, request: Request):
 
             con.execute(query).fetchall()
 
-            # Attend activement que le fichier soit écrit
-            start = time.time()
+            start_wait = time.time()
             while not os.path.exists(profile_path):
-                if time.time() - start > 2:
+                if time.time() - start_wait > 2:
                     raise HTTPException(500, "Profiling file not written.")
                 time.sleep(0.01)
 
             with open(profile_path) as f:
                 profiling_data = json.load(f)
 
-            os.remove(profile_path)  # nettoyage du fichier temporaire
+            os.remove(profile_path)
+
+            exec_time = time.time() - start_time
+            print(f"📈 Profiling completed in {exec_time:.4f} seconds")
 
             return {
                 "profiling": profiling_data,
-                "hostname": hostname
+                "hostname": hostname,
+                "execution_time": exec_time
             }
 
         else:
@@ -69,12 +89,25 @@ def execute_query(req: SQLRequest, request: Request):
             columns = [desc[0] for desc in con.description]
             sanitized_rows = [sanitize_row(row) for row in result]
 
+            exec_time = time.time() - start_time
+            print(f"📊 Returned {len(sanitized_rows)} rows in {exec_time:.4f} seconds")
+
             return {
                 "columns": columns,
                 "rows": sanitized_rows,
-                "hostname": hostname
+                "hostname": hostname,
+                "execution_time": exec_time
             }
 
     except Exception as e:
-        print(f"Query execution failed: {e}")
+        print(f"❌ Query execution failed: {e}")
         raise HTTPException(400, str(e))
+
+    finally:
+        # Remet la config des threads si on l'a modifiée
+        if original_threads is not None:
+            try:
+                con.execute(f"SET threads TO {original_threads}")
+                print(f"🔄 Threads reset to original value: {original_threads}")
+            except Exception as e:
+                print(f"⚠️ Failed to reset threads to {original_threads}: {e}")
