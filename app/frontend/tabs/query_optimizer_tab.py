@@ -22,6 +22,20 @@ def format_components_inline(components: dict) -> str:
         lines.append(f"**{key}:** `{value_str}`")
     return "\n\n".join(lines)
 
+def fetch_execution_plan(query_url: str, disable_ssl_verification: bool, query, label):
+    res = requests.post(
+        query_url,
+        json={"query": query, "profiling": True, "max_rows": 1, "num_threads": -1},
+        verify=not disable_ssl_verification,
+        timeout=10,
+    )
+    if res.ok:
+        plan = res.json().get("profiling", "")
+        st.subheader(f"🗺️ Execution Plan - {label}")
+        st.json(plan)
+    else:
+        st.error(f"Failed to fetch execution plan for {label}")
+
 def run_query_optimizer_tab(base_url: str, disable_ssl_verification: bool):
     st.header("🧠 SQL Optimizer")
 
@@ -101,6 +115,7 @@ def run_query_optimizer_tab(base_url: str, disable_ssl_verification: bool):
                     except Exception as e:
                         st.error(f"❌ Error calling backend: {e}")
 
-
+            fetch_execution_plan(QUERY_URL, disable_ssl_verification,sql_original, "Original Query")
+            fetch_execution_plan(QUERY_URL,disable_ssl_verification,sql_optimized, "Optimized Query")
         except Exception as e:
             st.error(f"❌ Unexpected error: {e}")
