@@ -16,3 +16,7 @@ class SuggestPartitionRequest(BaseModel):
 class PartitionValueCountRequest(BaseModel):
     s3_path: str
     column: str
+
+
+class SQLAnalyzerRequest(BaseModel):
+    sql: str

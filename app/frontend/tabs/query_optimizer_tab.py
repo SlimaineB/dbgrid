@@ -1,19 +1,6 @@
 import requests
-from sqlglot import parse_one, optimizer, exp
 import streamlit as st
 import difflib
-
-def extract_query_structure(tree):
-    return {
-        "Tables": [t.sql() for t in tree.find_all("Table")],
-        "Joins": [j.sql() for j in tree.find_all("Join")],
-        "Select Columns": [e.sql() for e in tree.expressions] if hasattr(tree, "expressions") else [],
-        "Where": tree.args.get("where").sql() if tree.args.get("where") else "—",
-        "Group By": tree.args.get("group").sql() if tree.args.get("group") else "—",
-        "Having": tree.args.get("having").sql() if tree.args.get("having") else "—",
-        "Order By": tree.args.get("order").sql() if tree.args.get("order") else "—",
-        "Limit": tree.args.get("limit").sql() if tree.args.get("limit") else "—",
-    }
 
 def diff_explanation(sql1, sql2):
     d = difflib.unified_diff(
@@ -25,6 +12,16 @@ def diff_explanation(sql1, sql2):
     )
     return "\n".join(d)
 
+def format_components_inline(components: dict) -> str:
+    lines = []
+    for key, value in components.items():
+        if isinstance(value, list):
+            value_str = ", ".join(value) if value else "—"
+        else:
+            value_str = value or "—"
+        lines.append(f"**{key}:** `{value_str}`")
+    return "\n\n".join(lines)
+
 def run_query_optimizer_tab(base_url: str, disable_ssl_verification: bool):
     st.header("🧠 SQL Optimizer")
 
@@ -32,19 +29,21 @@ def run_query_optimizer_tab(base_url: str, disable_ssl_verification: bool):
 
     if st.button("🔍 Optimize Query"):
         try:
-            print("📥 Parsing SQL...")
-            tree_original = parse_one(sql_input)
-            print("✅ AST parsed:", tree_original)
+            ANALYZE_URL = base_url.rstrip("/") + "/analyze"
+            QUERY_URL = base_url.rstrip("/") + "/query"
 
-            if not isinstance(tree_original, exp.Select):
-                raise TypeError(f"Only SELECT queries are supported. Got: {type(tree_original)}")
+            res = requests.post(ANALYZE_URL, json={"sql": sql_input}, verify=not disable_ssl_verification, timeout=10)
+            if not res.ok:
+                st.error(f"❌ Backend error: {res.status_code}")
+                return
 
-            print("⚙️ Optimizing query...")
-            tree_optimized = optimizer.optimize(tree_original)
-            print("✅ Optimized AST:", tree_optimized)
+            data = res.json()
+            if "error" in data:
+                st.error(f"❌ Analyze error: {data['error']}")
+                return
 
-            sql_original = tree_original.sql(pretty=True)
-            sql_optimized = tree_optimized.sql(pretty=True)
+            sql_original = data["original_sql"]
+            sql_optimized = data["optimized_sql"]
 
             col1, col2 = st.columns(2)
             with col1:
@@ -62,20 +61,12 @@ def run_query_optimizer_tab(base_url: str, disable_ssl_verification: bool):
                 st.success("✅ Query already optimal.")
 
             st.subheader("📋 Query Components")
-            original = extract_query_structure(tree_original)
-            optimized = extract_query_structure(tree_optimized)
-            rows = []
-            for key in original.keys():
-                rows.append({
-                    "Component": key,
-                    "Original": original[key],
-                    "Optimized": optimized[key],
-                })
-            st.dataframe(rows, use_container_width=True)
+            st.markdown("### Original")
+            st.markdown(format_components_inline(data["components"]))
+            st.markdown("### Optimized")
+            st.markdown(format_components_inline(data["components_optimized"]))
 
             st.subheader("⚙️ Execute and Compare")
-
-            API_URL = base_url.rstrip("/") + "/query"
             payloads = [
                 ("Original", sql_original),
                 ("Optimized", sql_optimized)
@@ -84,17 +75,32 @@ def run_query_optimizer_tab(base_url: str, disable_ssl_verification: bool):
             for label, query in payloads:
                 with st.expander(f"▶️ {label} Execution Result", expanded=False):
                     try:
-                        res = requests.post(API_URL, json={"sql": query}, verify=not disable_ssl_verification, timeout=10)
+                        res = requests.post(
+                            QUERY_URL,
+                            json={
+                                "query": query,
+                                "profiling": False,
+                                "max_rows": 50,
+                                "num_threads": -1
+                            },
+                            verify=not disable_ssl_verification,
+                            timeout=10
+                        )
                         if res.ok:
                             data = res.json()
                             st.success(f"{label} executed successfully.")
-                            st.write(f"⏱️ Time: {data.get('time', 'N/A')} ms")
-                            st.dataframe(data.get("result", []))
+                            st.write(f"⏱️ Time: {round(data.get('execution_time'),3) if data.get('execution_time') else 'N/A'} s")
+                            if "columns" in data and "rows" in data:
+                                st.dataframe([dict(zip(data["columns"], row)) for row in data["rows"]])
+                            elif "profiling" in data:
+                                st.json(data["profiling"])
+                            else:
+                                st.write(data)
                         else:
                             st.error(f"❌ {label} failed with status {res.status_code}")
                     except Exception as e:
                         st.error(f"❌ Error calling backend: {e}")
 
+
         except Exception as e:
-            print(f"❌ [ERROR] {e}")
-            st.error(f"❌ Error optimizing query: {e}")
+            st.error(f"❌ Unexpected error: {e}")
