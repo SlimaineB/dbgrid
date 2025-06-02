@@ -36,6 +36,7 @@ def run_query_tab(API_URL, disable_ssl_verification):
         else:
             num_threads = -1
 
+        use_distributed_query = st.checkbox("Use Distributed Query", value=False)
 
     with col1:
         query = st.text_area("Your SQL query", height=250, value=examples[example_choice], placeholder="Ex: SELECT 1 as demo;")
@@ -56,9 +57,14 @@ def run_query_tab(API_URL, disable_ssl_verification):
                     "query": query,
                     "profiling": enable_profiling,
                     "max_rows": max_rows,
-                    "num_threads": num_threads  # 👈 value depends on mode
+                    "num_threads": num_threads,  # 👈 value depends on mode
+                    "distributed": use_distributed_query,
+                    "lb_url" : API_URL.rstrip("/") 
                 }
-                response = requests.post(API_URL, json=payload, verify=not disable_ssl_verification)
+                if use_distributed_query:
+                    response = requests.post(f"{API_URL}/distributed-query", json=payload, verify=not disable_ssl_verification)
+                else:
+                    response = requests.post(f"{API_URL}/query", json=payload, verify=not disable_ssl_verification)
                 elapsed = time.time() - start
 
                 if response.status_code == 200:

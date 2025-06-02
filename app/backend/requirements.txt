@@ -5,3 +5,4 @@ duckdb-extension-aws==1.3.0
 fastapi==0.115.12
 uvicorn==0.34.2
 psutil==7.0.0
+httpx==0.28.1

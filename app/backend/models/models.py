@@ -3,8 +3,11 @@ from pydantic import BaseModel
 class SQLRequest(BaseModel):
     query: str
     profiling: bool = False
+    distribued: bool = False
     max_rows: int = 50
     num_threads: int = -1
+    lb_url: str = None  # Load Balancer URL for distributed queries
+    # Note: num_threads = -1 means "default" or "auto" mode, where the backend decides the number of threads
 
 class S3PathRequest(BaseModel):
     s3_path: str

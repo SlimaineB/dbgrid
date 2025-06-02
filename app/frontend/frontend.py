@@ -28,9 +28,9 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### 🪣 S3 Configuration")
 
 # Test backend status
-API_URL = backend_base_url.rstrip("/") + "/query"
+API_URL = backend_base_url.rstrip("/") 
 STATUS_URL = backend_base_url.rstrip("/") + "/status"
-TUNING_BASE_URL = backend_base_url.rstrip("/")
+
 
 try:
     resp = requests.get(STATUS_URL, verify=not disable_ssl_verification, timeout=2)
@@ -60,13 +60,13 @@ with tabs[1]:
     run_cluster_tab(STATUS_URL, disable_ssl_verification)
 
 with tabs[2]:
-    run_tuning_tab(TUNING_BASE_URL, disable_ssl_verification)
+    run_tuning_tab(API_URL, disable_ssl_verification)
 
 with tabs[3]:
-    run_partition_tab(TUNING_BASE_URL,disable_ssl_verification)
+    run_partition_tab(API_URL,disable_ssl_verification)
 
 with tabs[4]:
-    run_bloom_filter_tab(TUNING_BASE_URL, disable_ssl_verification)
+    run_bloom_filter_tab(API_URL, disable_ssl_verification)
 
 with tabs[5]:
-    run_query_optimizer_tab(TUNING_BASE_URL, disable_ssl_verification)
+    run_query_optimizer_tab(API_URL, disable_ssl_verification)
