@@ -224,7 +224,7 @@ def parquet_filterability_score(req: S3PathRequest, request: Request):
                     "top_value_ratio": None,
                 })
 
-        # 2. Bloom filter metadata (corrigée)
+        # 2. Bloom filter metadata
         bf_rows = con.execute(f"""
             SELECT 
                 path_in_schema AS column,

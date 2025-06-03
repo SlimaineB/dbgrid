@@ -36,7 +36,7 @@ def run_query_tab(API_URL, disable_ssl_verification):
         else:
             num_threads = -1
 
-        use_distributed_query = st.checkbox("Use Distributed Query", value=False)
+        use_distributed_query = st.checkbox("Use Distributed Query (⚠️ Experimental)", value=False)
 
     with col1:
         query = st.text_area("Your SQL query", height=250, value=examples[example_choice], placeholder="Ex: SELECT 1 as demo;")
@@ -57,7 +57,7 @@ def run_query_tab(API_URL, disable_ssl_verification):
                     "query": query,
                     "profiling": enable_profiling,
                     "max_rows": max_rows,
-                    "num_threads": num_threads,  # 👈 value depends on mode
+                    "num_threads": num_threads, 
                     "distributed": use_distributed_query,
                     "lb_url" : API_URL.rstrip("/") 
                 }

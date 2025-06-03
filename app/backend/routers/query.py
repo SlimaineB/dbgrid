@@ -35,9 +35,9 @@ def execute_query(req: SQLRequest, request: Request):
     original_threads = None
     start_time = time.time()
 
-    logger.info(f"📥 Received query from {hostname}")
-    logger.info(f"🧵 Threads requested: {req.num_threads}")
-    logger.info(f"📝 Query:\n{req.query.strip()}")
+    logger.info(f"Received query from {hostname}")
+    logger.info(f"Threads requested: {req.num_threads}")
+    logger.info(f"Query:\n{req.query.strip()}")
 
     try:
         query = req.query.strip().rstrip(';')
@@ -46,13 +46,13 @@ def execute_query(req: SQLRequest, request: Request):
             try:
                 original_threads = con.execute("SELECT current_setting('threads') AS val").fetchone()[0]
                 con.execute(f"SET threads TO {req.num_threads}")
-                logger.info(f"✅ Threads set to {req.num_threads} (original was {original_threads})")
+                logger.info(f"Threads set to {req.num_threads} (original was {original_threads})")
             except Exception as e:
-                logger.warning(f"⚠️ Failed to set threads: {e}")
+                logger.warning(f"Failed to set threads: {e}")
 
         if re.match(r"(?i)^select\b", query) and not re.search(r"(?i)\blimit\b", query):
             query += f" LIMIT {req.max_rows}"
-            logger.info(f"➕ Appended LIMIT {req.max_rows}")
+            logger.info(f"Appended LIMIT {req.max_rows}")
 
         if req.profiling:
             profile_path = f"/tmp/duckdb_profile_{uuid.uuid4().hex}.json"
@@ -76,7 +76,7 @@ def execute_query(req: SQLRequest, request: Request):
             os.remove(profile_path)
 
             exec_time = time.time() - start_time
-            logger.info(f"📈 Profiling completed in {exec_time:.4f} seconds")
+            logger.info(f"Profiling completed in {exec_time:.4f} seconds")
 
             return {
                 "profiling": profiling_data,
@@ -90,7 +90,7 @@ def execute_query(req: SQLRequest, request: Request):
             sanitized_rows = [sanitize_row(row) for row in result]
 
             exec_time = time.time() - start_time
-            logger.info(f"📊 Returned {len(sanitized_rows)} rows in {exec_time:.4f} seconds")
+            logger.info(f"Returned {len(sanitized_rows)} rows in {exec_time:.4f} seconds")
 
             return {
                 "columns": columns,
@@ -100,13 +100,13 @@ def execute_query(req: SQLRequest, request: Request):
             }
 
     except Exception as e:
-        logger.error(f"❌ Query execution failed: {e}")
+        logger.error(f"Query execution failed: {e}")
         raise HTTPException(400, str(e))
 
     finally:
         if original_threads is not None:
             try:
                 con.execute(f"SET threads TO {original_threads}")
-                logger.info(f"🔄 Threads reset to original value: {original_threads}")
+                logger.info(f"Threads reset to original value: {original_threads}")
             except Exception as e:
-                logger.warning(f"⚠️ Failed to reset threads to {original_threads}: {e}")
+                logger.warning(f"Failed to reset threads to {original_threads}: {e}")
