@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Request, HTTPException
 from models.models import SQLRequest
 import os, json, time, re, uuid, math, logging
+import hashlib
+import threading
+import duckdb
+
 from decimal import Decimal
 from datetime import datetime, date
 
@@ -27,9 +31,9 @@ def sanitize_row(row):
 
 @router.post("/query")
 def execute_query(req: SQLRequest, request: Request):
-    gloabal_con = request.app.state.con
+    global_con = request.app.state.con
 
-    con = gloabal_con.cursor() # Local connexion for this request
+    con = global_con.cursor() # Local connexion for this request
     hostname = os.uname().nodename
 
     original_threads = None
@@ -85,7 +89,7 @@ def execute_query(req: SQLRequest, request: Request):
             }
 
         else:
-            result = con.execute(query).fetchall()
+            result = execute_db_query(con, query)
             columns = [desc[0] for desc in con.description]
             sanitized_rows = [sanitize_row(row) for row in result]
 
@@ -110,3 +114,67 @@ def execute_query(req: SQLRequest, request: Request):
                 logger.info(f"Threads reset to original value: {original_threads}")
             except Exception as e:
                 logger.warning(f"Failed to reset threads to {original_threads}: {e}")
+
+
+
+
+
+def background_cache_query(query: str, output_path: str):
+    try:
+        logging.info("Starting background caching task...")
+        # Crée le dossier si local
+        if output_path.startswith("./") or not "://" in output_path:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        logging.info(f"Caching query: {query} to {output_path}")
+        cache_sql = f"""
+            COPY (
+                SELECT *, NOW() AS cached_at
+                FROM ({query}) AS subq
+            ) TO '{output_path}'
+            (FORMAT PARQUET, OVERWRITE_OR_IGNORE TRUE)
+        """
+
+        con = duckdb.connect()
+        con.execute(cache_sql)
+        con.close()
+        logging.info(f"Cached result to {output_path}")
+    except Exception as e:
+        logging.warning(f"Failed to cache query in background: {e}")
+
+def execute_db_query(con, query, force_refresh: bool = False):
+    normalized_query = query.strip().rstrip(';')
+    query_hash = hashlib.sha256(normalized_query.encode('utf-8')).hexdigest()
+    cached_date = str(date.today())
+
+    parquet_path = f"./db_cache/cached_date={cached_date}/db_cache_{query_hash}.parquet"
+
+    try:
+        if not force_refresh:
+            try:
+                logging.info(f"Attempting to read cache from {parquet_path}")
+                result = con.execute(f"SELECT * EXCLUDE (cached_at, cached_date) FROM read_parquet('{parquet_path}')").fetchall()
+                logging.info(f"Using cached result from {parquet_path}")
+                return result
+            except Exception:
+                logging.info(f"No valid cache found or failed to read at {parquet_path}")
+
+        start_time = time.time()
+        result = con.execute(normalized_query).fetchall()
+        duration = time.time() - start_time
+
+        if duration > 1:
+            thread = threading.Thread(
+                target=background_cache_query,
+                args=(normalized_query, parquet_path),
+                daemon=True
+            )
+            thread.start()
+
+        return result
+
+    except Exception as e:
+        logging.error(f"Query execution failed: {e}")
+        raise
+
+
+

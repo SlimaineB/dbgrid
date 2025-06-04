@@ -172,3 +172,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+app/backend/.tmp/
+app/backend/db_cache/

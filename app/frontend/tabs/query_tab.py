@@ -36,13 +36,13 @@ def run_query_tab(API_URL, disable_ssl_verification):
         else:
             num_threads = -1
 
+        use_cache = st.checkbox("Use Cache", value=False)
+
         use_distributed_query = st.checkbox("Use Distributed Query (⚠️ Experimental)", value=False)
 
     with col1:
         query = st.text_area("Your SQL query", height=250, value=examples[example_choice], placeholder="Ex: SELECT 1 as demo;")
         
-
-
         show_result_json = st.checkbox("Show SQL result as JSON", value=False)
         enable_profiling = st.checkbox("Enable profiling", value=False)
 
@@ -59,7 +59,8 @@ def run_query_tab(API_URL, disable_ssl_verification):
                     "max_rows": max_rows,
                     "num_threads": num_threads, 
                     "distributed": use_distributed_query,
-                    "lb_url" : API_URL.rstrip("/") 
+                    "lb_url" : API_URL.rstrip("/"),
+                    "use_cache": use_cache
                 }
                 if use_distributed_query:
                     response = requests.post(f"{API_URL}/distributed-query", json=payload, verify=not disable_ssl_verification)
