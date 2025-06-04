@@ -7,7 +7,7 @@ class SQLRequest(BaseModel):
     max_rows: int = 50
     num_threads: int = -1 # Note: num_threads = -1 means "default" or "auto" mode, where the backend decides the number of threads
     lb_url: str = None  # Load Balancer URL for distributed queries
-    use_cache: bool = False  # Whether to use cache for the query results
+    force_refresh_cache: bool = False  # Whether to use cache for the query results
     
 
 class S3PathRequest(BaseModel):

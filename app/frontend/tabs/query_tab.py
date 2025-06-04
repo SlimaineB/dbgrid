@@ -22,13 +22,10 @@ def run_query_tab(API_URL, disable_ssl_verification):
 
     col1, col2 = st.columns([3, 1])
     with col2:
-        st.markdown("#### Example Queries")
+        st.text("Example Queries")
         example_choice = st.selectbox("", options=list(examples.keys()))
-        st.markdown("#### Example SQL")
-        st.code(examples[example_choice], language="sql")
 
         max_rows = st.selectbox("Maximum number of rows to display:", [10, 50, 100, 500, 1000], index=1)
-
       
         thread_mode = st.selectbox("Thread mode:", ["Default (Auto)", "Custom number of threads"])
         if thread_mode == "Custom number of threads":
@@ -36,7 +33,7 @@ def run_query_tab(API_URL, disable_ssl_verification):
         else:
             num_threads = -1
 
-        use_cache = st.checkbox("Use Cache", value=False)
+        force_refresh_cache = st.checkbox("Force Refresh Cache", value=True)
 
         use_distributed_query = st.checkbox("Use Distributed Query (⚠️ Experimental)", value=False)
 
@@ -60,7 +57,7 @@ def run_query_tab(API_URL, disable_ssl_verification):
                     "num_threads": num_threads, 
                     "distributed": use_distributed_query,
                     "lb_url" : API_URL.rstrip("/"),
-                    "use_cache": use_cache
+                    "force_refresh_cache": force_refresh_cache
                 }
                 if use_distributed_query:
                     response = requests.post(f"{API_URL}/distributed-query", json=payload, verify=not disable_ssl_verification)

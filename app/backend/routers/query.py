@@ -89,7 +89,7 @@ def execute_query(req: SQLRequest, request: Request):
             }
 
         else:
-            result = execute_db_query(con, query)
+            result = execute_db_query(con, query, req.force_refresh_cache)
             columns = [desc[0] for desc in con.description]
             sanitized_rows = [sanitize_row(row) for row in result]
 
@@ -141,7 +141,9 @@ def background_cache_query(query: str, output_path: str):
     except Exception as e:
         logging.warning(f"Failed to cache query in background: {e}")
 
-def execute_db_query(con, query, force_refresh: bool = False):
+
+
+def execute_db_query(con, query, force_refresh_cache: bool = False):
     normalized_query = query.strip().rstrip(';')
     query_hash = hashlib.sha256(normalized_query.encode('utf-8')).hexdigest()
     cached_date = str(date.today())
@@ -149,7 +151,7 @@ def execute_db_query(con, query, force_refresh: bool = False):
     parquet_path = f"./db_cache/cached_date={cached_date}/db_cache_{query_hash}.parquet"
 
     try:
-        if not force_refresh:
+        if not force_refresh_cache:
             try:
                 logging.info(f"Attempting to read cache from {parquet_path}")
                 result = con.execute(f"SELECT * EXCLUDE (cached_at, cached_date) FROM read_parquet('{parquet_path}')").fetchall()
