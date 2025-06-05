@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, HTTPException
-from models.models import SQLRequest
+from models.models import SQLRequest, CacheRequest
 import os, json, time, re, uuid, math, logging
 import hashlib
 import threading
@@ -33,7 +33,7 @@ def sanitize_row(row):
 def execute_query(req: SQLRequest, request: Request):
     global_con = request.app.state.con
 
-    con = global_con.cursor() # Local connexion for this request
+    con = global_con #.cursor() # Local connexion for this request
     hostname = os.uname().nodename
 
     original_threads = None
@@ -118,64 +118,69 @@ def execute_query(req: SQLRequest, request: Request):
 
 
 
-
-def background_cache_query(query: str, output_path: str):
+def perform_cache(con, query: str, output_path: str):
     try:
-        logging.info("Starting background caching task...")
-        # Crée le dossier si local
-        if output_path.startswith("./") or not "://" in output_path:
+        logger.info("Performing synchronous caching task...")
+
+        is_s3 = "://" in output_path
+        if not is_s3:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        logging.info(f"Caching query: {query} to {output_path}")
+
+        logger.info(f"Caching query to: {output_path}")
         cache_sql = f"""
             COPY (
-                SELECT *, NOW() AS cached_at
+                SELECT subq.*, NOW() AS cached_at
                 FROM ({query}) AS subq
             ) TO '{output_path}'
             (FORMAT PARQUET, OVERWRITE_OR_IGNORE TRUE)
         """
 
-        con = duckdb.connect()
         con.execute(cache_sql)
-        con.close()
-        logging.info(f"Cached result to {output_path}")
+        logger.info(f"Cached result to {output_path}")
+
     except Exception as e:
-        logging.warning(f"Failed to cache query in background: {e}")
+        logger.warning(f"Failed to cache query: {e}")
 
 
 
 def execute_db_query(con, query, force_refresh_cache: bool = False):
+    CACHE_OUTPUT_BASE = os.getenv("CACHE_OUTPUT_BASE", "./db_cache")
+    MAX_CACHE_AGE_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "60"))
+
     normalized_query = query.strip().rstrip(';')
     query_hash = hashlib.sha256(normalized_query.encode('utf-8')).hexdigest()
     cached_date = str(date.today())
+    parquet_path = f"{CACHE_OUTPUT_BASE.rstrip('/')}/cached_date={cached_date}/db_cache_{query_hash}.parquet"
 
-    parquet_path = f"./db_cache/cached_date={cached_date}/db_cache_{query_hash}.parquet"
+    logger.info(f"Using cache base: {CACHE_OUTPUT_BASE}")
 
     try:
         if not force_refresh_cache:
             try:
-                logging.info(f"Attempting to read cache from {parquet_path}")
-                result = con.execute(f"SELECT * EXCLUDE (cached_at, cached_date) FROM read_parquet('{parquet_path}')").fetchall()
-                logging.info(f"Using cached result from {parquet_path}")
+                logger.info(f"Attempting to read cache from {parquet_path}")
+                result = con.execute(
+                    f"""
+                    SELECT * EXCLUDE (cached_at, cached_date)
+                    FROM read_parquet('{parquet_path}')
+                    WHERE cached_at >= NOW() - INTERVAL '{MAX_CACHE_AGE_MINUTES} minutes'
+                    """
+                ).fetchall()
+                logger.info(f"Using cached result from {parquet_path}")
                 return result
             except Exception:
-                logging.info(f"No valid cache found or failed to read at {parquet_path}")
+                logger.info(f"No valid cache found or failed to read at {parquet_path}")
 
         start_time = time.time()
         result = con.execute(normalized_query).fetchall()
         duration = time.time() - start_time
 
-        if duration > 1:
-            thread = threading.Thread(
-                target=background_cache_query,
-                args=(normalized_query, parquet_path),
-                daemon=True
-            )
-            thread.start()
+        if duration > 0.5:
+            perform_cache(con, normalized_query, parquet_path)
 
         return result
 
     except Exception as e:
-        logging.error(f"Query execution failed: {e}")
+        logger.error(f"Query execution failed: {e}")
         raise
 
 

@@ -8,6 +8,7 @@ app = FastAPI()
 con = init_duckdb()
 app.state.con = con
 
+
 # Inclure les routers
 app.include_router(query.router)
 app.include_router(distributed_query.router)

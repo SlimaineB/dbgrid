@@ -10,6 +10,10 @@ class SQLRequest(BaseModel):
     force_refresh_cache: bool = False  # Whether to use cache for the query results
     
 
+class CacheRequest(BaseModel):
+    query: str
+    cache_path: str
+
 class S3PathRequest(BaseModel):
     s3_path: str
 
